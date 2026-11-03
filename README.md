@@ -76,9 +76,8 @@ under `site/` and fails on any metadata segment (Exif, where GPS lives;
 XMP; IPTC; comments). Deploys go through `npm run deploy`, which refuses if
 `site/` contains anything that isn't committed.
 
-**Plain on purpose.** The page is unstyled HTML with no framework.
-`<meta name="color-scheme" content="light dark">` gives it the browser's
-own dark mode.
+**Plain on purpose.** The page is unstyled HTML with no framework, on a
+white background for everyone (`<meta name="color-scheme" content="light">`).
 
 ## Honest limits
 

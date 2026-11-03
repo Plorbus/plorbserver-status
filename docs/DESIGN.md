@@ -184,8 +184,9 @@ The page shows each thing the box hosts with its own up/down and its own
 
 - **Deliberately plain HTML, no framework, no stylesheet** (one rule stops
   photos overflowing on phones). Styling comes later.
-  `<meta name="color-scheme" content="light dark">` gives the browser's own
-  dark mode for free.
+  `<meta name="color-scheme" content="light">` keeps it white for everyone,
+  even visitors in dark mode (the owner's choice; `"light dark"` would
+  follow each visitor's device instead).
 - **Honest states:** "unknown, because no check has been recorded yet"
   rather than a promise. A warning when no check has arrived for 30 minutes.
   While down, it says when the server was last seen up.
