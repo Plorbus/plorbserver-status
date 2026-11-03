@@ -22,7 +22,7 @@
     {
       "binding": "DB",
       "database_name": "plorbserver-status",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "acb6ca19-ade8-4f28-868a-c5b042f65fc2",
       "migrations_dir": "worker/migrations"
     }
   ],
