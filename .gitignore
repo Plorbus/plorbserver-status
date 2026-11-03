@@ -1,0 +1,12 @@
+# Original photos: they never get committed. Only cleaned copies in site/photos/ do.
+/server pictures/
+/server.jpg
+/photo-staging/
+
+# Local planning notes (contain session context, not portfolio material)
+/docs/superpowers/
+
+node_modules/
+.wrangler/
+.dev.vars
+*.log
