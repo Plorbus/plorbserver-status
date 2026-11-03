@@ -89,7 +89,7 @@ own dark mode.
 - **5-minute resolution.** An outage shorter than that can fall between
   checks.
 - **Services are checked from inside the server.** The Minecraft check
-  proves the game answers, but not that the router's port forward works.
+  proves the game answers, but not that players can reach it from outside.
   See `docs/DESIGN.md` section 5.
 
 ## Running the tests

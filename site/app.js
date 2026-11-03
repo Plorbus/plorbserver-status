@@ -44,7 +44,7 @@ function render(data, now) {
 
   const d = lastUp?.details;
   const items = [];
-  if (latest.up && latest.ms != null) items.push(`Response time: ${latest.ms} ms (Cloudflare to the server and back)`);
+  if (latest.up && latest.ms != null) items.push(`Response time: ${latest.ms} ms (Cloudflare to the server and back, including the server checking its services)`);
   if (d) {
     if (d.load_1m != null) items.push(`CPU load (1 min average): ${d.load_1m} across ${d.cpus} CPUs`);
     if (d.memory_used_percent != null) items.push(`Memory used: ${d.memory_used_percent}%`);

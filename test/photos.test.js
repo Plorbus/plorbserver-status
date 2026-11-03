@@ -10,7 +10,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
 const SITE = new URL('../site/', import.meta.url).pathname;
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.heic', '.heif', '.tif', '.tiff', '.bmp']);
+// Everything that may be deployed. Anything else in site/ (an .svg, a .png,
+// a file with no extension) fails, because it can't be checked here.
+const ALLOWED_EXTENSIONS = new Set(['.html', '.js', '.css', '.jpg', '.jpeg']);
 
 function filesUnder(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -37,8 +39,10 @@ export function scanJpeg(bytes) {
     if (offset + 4 > bytes.length) throw new Error('file ends inside a segment header');
     const length = bytes.readUInt16BE(offset + 2);
     if (length < 2) throw new Error(`bad segment length at byte ${offset}`);
-    // APP1..APP15 (APP0 is the plain JFIF header) and COM (comments).
+    // APP1..APP15 and COM (comments) are metadata. APP0 is the plain JFIF
+    // header, which is 16 bytes long unless it carries a thumbnail image.
     if ((marker >= 0xe1 && marker <= 0xef) || marker === 0xfe) metadata.push(hex(marker));
+    if (marker === 0xe0 && length > 16) metadata.push('0xFFE0 (thumbnail)');
     offset += 2 + length;
     if (marker === 0xda) {
       // Start of scan: compressed image data follows. Skip to the next real
@@ -76,6 +80,13 @@ test('scanner: spots data appended after the end of the image', () => {
   assert.equal(scanJpeg(b(SOI, SOS, ENTROPY, EOI, [0xde, 0xad, 0xbe, 0xef])).trailingBytes, 4);
 });
 
+test('scanner: spots a thumbnail hidden in the JFIF header', () => {
+  const app0WithThumb = [0xff, 0xe0, 0x00, 0x13, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00];
+  const app0Plain = [0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+  assert.deepEqual(scanJpeg(b(SOI, app0WithThumb, SOS, ENTROPY, EOI)).metadata, ['0xFFE0 (thumbnail)']);
+  assert.deepEqual(scanJpeg(b(SOI, app0Plain, SOS, ENTROPY, EOI)).metadata, []);
+});
+
 test('scanner: a truncated or fake JPEG fails loudly instead of passing', () => {
   assert.throws(() => scanJpeg(b(SOI, SOS, ENTROPY)), /ends before/);
   assert.throws(() => scanJpeg(Buffer.from('<html>not an image</html>')), /not a JPEG/);
@@ -83,15 +94,14 @@ test('scanner: a truncated or fake JPEG fails loudly instead of passing', () => 
 
 for (const path of filesUnder(SITE)) {
   const ext = extname(path).toLowerCase();
-  if (!IMAGE_EXTENSIONS.has(ext)) continue;
   const name = path.slice(SITE.length);
   if (ext === '.jpg' || ext === '.jpeg') {
     test(`${name} has no metadata and nothing appended`, () => {
       assert.deepEqual(scanJpeg(readFileSync(path)), { metadata: [], trailingBytes: 0 });
     });
-  } else {
-    test(`${name}: only JPEGs are allowed in site/ until ${ext} has its own metadata check`, () => {
-      assert.fail(`${name} is a ${ext} file, which this test can't check for location data`);
+  } else if (!ALLOWED_EXTENSIONS.has(ext)) {
+    test(`${name}: only html/js/css/jpg files may be deployed`, () => {
+      assert.fail(`${name} (${ext || 'no extension'}) can't be checked for metadata, so it can't go in site/`);
     });
   }
 }

@@ -131,12 +131,11 @@ The page shows each thing the box hosts with its own up/down and its own
   a fake email open every few minutes. `/` gets Express's built-in 404, which
   proves the app is alive and logs nothing.
 - **Minecraft is checked from inside the server, not from outside.**
-  Checking it the way friends connect would mean storing the home DDNS
-  hostname in Cloudflare and pinging the home IP from outside every 5
-  minutes. The local check needs no secret and adds no exposure. Its blind
-  spot: it can't see a broken router port forward or DDNS while the box
-  itself is fine. An external check could be added with the hostname kept
-  as a Cloudflare secret. It reports no player names or counts.
+  Checking it the way players connect would mean storing private
+  connection details in Cloudflare and probing the home connection from
+  outside every 5 minutes. The local check needs no secret and adds no
+  exposure. Its blind spot: it proves the game answers, not that players
+  can reach it from outside. It reports no player names or counts.
 - **A service is only up if the server was reachable.** If the status API
   doesn't answer, every service counts as down for that check, so no
   service can look healthier than the box it runs on. (Edge case: if only
@@ -147,8 +146,13 @@ The page shows each thing the box hosts with its own up/down and its own
   the server is updated first, then the database migration, then the
   Worker. The per-service record is also written separately from the main
   uptime record: if the service tables were missing, the server's own
-  uptime would still be recorded and the page would just leave out the
-  per-service section.
+  uptime would still be recorded and the page would show "no data yet"
+  for the services.
+- **Probing costs a little response time and a log line.** The checker
+  waits for the server's three probes, so the response time shown includes
+  them (normally a few milliseconds, at most 2 seconds if a service hangs).
+  nginx logs each probe in its access log, tagged with the user agent
+  `plorbserver-status-probe`, so it can be filtered out.
 
 ## 6. What counts as "up" for the server
 
@@ -198,8 +202,9 @@ The page shows each thing the box hosts with its own up/down and its own
   including between the scans of progressive JPEGs, and fails on any
   metadata segment (Exif, which is where GPS lives; XMP; IPTC; comments),
   on any bytes appended after the image, and on anything it can't parse.
-  Other image formats in `site/` fail the test outright until they get a
-  check of their own.
+  Only html/js/css/jpg files may be deployed: anything else in `site/`
+  (an SVG, a PNG, a file with no extension) fails the test outright, and so
+  does a JPEG whose header carries a thumbnail.
 - `npm run deploy` refuses if `site/` contains anything not committed,
   because the deploy tool uploads whatever is in the folder.
 
