@@ -76,8 +76,10 @@ Choices around `cloudflared`:
   changes the binary. `unattended-upgrades` is allowed to install it from
   Cloudflare's repo. The package doesn't restart the service itself, so a
   systemd path unit watches `/usr/bin/cloudflared` and restarts the tunnel
-  when an upgrade replaces it. (Tested: it fires once per replacement, and
-  not at boot.)
+  when an upgrade replaces it. Tested with a plain file rename, which is how
+  dpkg swaps binaries in (it fired once per replacement, and not at boot).
+  It hasn't seen a real package upgrade yet, so the first one should be
+  confirmed with `journalctl -u cloudflared-restart`.
 
 ## 4. The status service
 
@@ -140,10 +142,13 @@ The page shows each thing the box hosts with its own up/down and its own
   service can look healthier than the box it runs on. (Edge case: if only
   the tunnel died, Minecraft, which doesn't use the tunnel, would really
   still be up but count as down.)
-- **Deploy order matters.** The checker treats a service as down unless the
-  server proves it answered, and older server versions didn't report that.
-  So the server is updated first, then the Worker, or the history would
-  start with false outages.
+- **Deploy order matters, but a mistake can't stop the uptime check.** The
+  checker treats a service as down unless the server proves it answered, so
+  the server is updated first, then the database migration, then the
+  Worker. The per-service record is also written separately from the main
+  uptime record: if the service tables were missing, the server's own
+  uptime would still be recorded and the page would just leave out the
+  per-service section.
 
 ## 6. What counts as "up" for the server
 
@@ -184,13 +189,17 @@ The page shows each thing the box hosts with its own up/down and its own
 
 ## 9. Photos
 
-- Originals never enter git (`.gitignore`), and cleaned copies are made
-  outside the repo first.
+- Originals never enter git (`.gitignore`), and cleaned copies are made in
+  a git-ignored staging folder first. Only the chosen ones are copied into
+  `site/`.
 - Cleaning: apply the camera's rotation, *then* drop all metadata (so
   portrait shots stay upright), resize to at most 1200 px.
-- **Checked, not trusted:** a test reads the bytes of every JPEG the site
-  can serve and fails on any metadata segment (Exif, which is where GPS
-  lives; XMP; IPTC; comments).
+- **Checked, not trusted:** a test parses every JPEG the site can serve,
+  including between the scans of progressive JPEGs, and fails on any
+  metadata segment (Exif, which is where GPS lives; XMP; IPTC; comments),
+  on any bytes appended after the image, and on anything it can't parse.
+  Other image formats in `site/` fail the test outright until they get a
+  check of their own.
 - `npm run deploy` refuses if `site/` contains anything not committed,
   because the deploy tool uploads whatever is in the folder.
 

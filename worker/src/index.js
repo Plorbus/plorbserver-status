@@ -7,7 +7,7 @@
 //   served by Cloudflare before this code ever runs.
 
 import { checkWithRetry } from './check.js';
-import { recordCheck, buildSummary, saveSummary, loadSummary } from './store.js';
+import { recordCheck, recordServices, buildSummary, saveSummary, loadSummary } from './store.js';
 
 const JSON_HEADERS = {
   'content-type': 'application/json',
@@ -19,6 +19,12 @@ export default {
   async scheduled(_controller, env) {
     const check = await checkWithRetry(env.API_URL);
     await recordCheck(env.DB, check);
+    try {
+      await recordServices(env.DB, check);
+    } catch (err) {
+      // Logged loudly, but the core uptime record above is already safe.
+      console.error(`recording per-service results failed: ${err.message}`);
+    }
     await saveSummary(env.DB, await buildSummary(env.DB, Date.now()));
     console.log(JSON.stringify({ up: check.up, ms: check.ms, code: check.code }));
   },

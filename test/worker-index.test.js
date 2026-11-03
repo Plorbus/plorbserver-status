@@ -49,3 +49,17 @@ test('unknown paths that are not static files are 404', async () => {
   const res = await worker.fetch(new Request('https://status.plorbus.dev/api/other'), { DB: fakeD1() });
   assert.equal(res.status, 404);
 });
+
+test('a scheduled run keeps recording uptime even if the service tables are missing', async () => {
+  const env = { DB: fakeD1({ only: ['0001_init.sql'] }), API_URL: 'https://api.plorbus.dev/' };
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  try {
+    await withFetch(async () => Response.json(API_BODY), () => worker.scheduled({}, env, { waitUntil() {} }));
+  } finally { console.error = originalError; }
+  const body = await (await worker.fetch(new Request('https://status.plorbus.dev/api/status'), env)).json();
+  assert.equal(body.latest.up, true);
+  assert.equal(body.services, null);
+  assert.ok(errors.some((e) => /service/.test(e)), 'the failure is logged, not swallowed');
+});

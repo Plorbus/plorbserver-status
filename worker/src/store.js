@@ -24,25 +24,13 @@ export function serviceUp(details, name) {
 }
 
 // Store one check, count it in its day, and drop anything too old. All in
-// one batch, so a failure leaves the tables exactly as they were.
+// one batch, so a failure leaves the tables exactly as they were. This is
+// the core uptime record and is kept separate from the per-service record
+// (recordServices), so a problem there can never stop this.
 export async function recordCheck(db, check) {
   const up = check.up ? 1 : 0;
   const hasMs = check.ms == null ? 0 : 1;
-  const day = dayOf(check.t);
-  const perService = SERVICES.flatMap((name) => {
-    const serviceIsUp = check.up && serviceUp(check.details, name) ? 1 : 0;
-    return [
-      db.prepare('INSERT OR REPLACE INTO service_checks (t, service, up) VALUES (?, ?, ?)')
-        .bind(check.t, name, serviceIsUp),
-      db.prepare(`INSERT INTO service_days (date, service, total, up) VALUES (?, ?, 1, ?)
-                  ON CONFLICT (date, service) DO UPDATE SET total = total + 1, up = up + excluded.up`)
-        .bind(day, name, serviceIsUp),
-    ];
-  });
   return db.batch([
-    ...perService,
-    db.prepare('DELETE FROM service_checks WHERE t < ?').bind(check.t - KEEP_RAW_MS),
-    db.prepare('DELETE FROM service_days WHERE date < ?').bind(dayOf(check.t - (KEEP_DAYS - 1) * DAY)),
     db.prepare('INSERT OR REPLACE INTO checks (t, up, ms, code, details) VALUES (?, ?, ?, ?, ?)')
       .bind(check.t, up, check.ms ?? null, check.code ?? null, check.details ? JSON.stringify(check.details) : null),
     db.prepare(`INSERT INTO days (date, total, up, ms_sum, ms_n) VALUES (?, 1, ?, ?, ?)
@@ -61,18 +49,28 @@ export async function recordCheck(db, check) {
   ]);
 }
 
-// Uptime windows count the checks that actually ran. If Cloudflare skipped
-// some runs, those minutes are unknown, not "up" and not "down".
-export async function buildSummary(db, now) {
-  const latest = await db.prepare('SELECT t, up, ms, code FROM checks ORDER BY t DESC LIMIT 1').first();
-  const lastUp = await db.prepare('SELECT t, details FROM checks WHERE up = 1 ORDER BY t DESC LIMIT 1').first();
-  const last24h = await db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(up), 0) AS up FROM checks WHERE t > ?')
-    .bind(now - 24 * HOUR).first();
-  const window = (days) => db.prepare('SELECT COALESCE(SUM(total), 0) AS total, COALESCE(SUM(up), 0) AS up FROM days WHERE date >= ?')
-    .bind(dayOf(now - (days - 1) * DAY)).first();
-  const { results: days } = await db.prepare('SELECT date, total, up, ms_sum, ms_n FROM days WHERE date >= ? ORDER BY date')
-    .bind(dayOf(now - (BAR_DAYS - 1) * DAY)).all();
+// The same, per hosted service. Its own batch: if this fails (for example,
+// the Worker was deployed before migration 0002), the main check above is
+// already stored.
+export async function recordServices(db, check) {
+  const day = dayOf(check.t);
+  return db.batch([
+    ...SERVICES.flatMap((name) => {
+      const serviceIsUp = check.up && serviceUp(check.details, name) ? 1 : 0;
+      return [
+        db.prepare('INSERT OR REPLACE INTO service_checks (t, service, up) VALUES (?, ?, ?)')
+          .bind(check.t, name, serviceIsUp),
+        db.prepare(`INSERT INTO service_days (date, service, total, up) VALUES (?, ?, 1, ?)
+                    ON CONFLICT (date, service) DO UPDATE SET total = total + 1, up = up + excluded.up`)
+          .bind(day, name, serviceIsUp),
+      ];
+    }),
+    db.prepare('DELETE FROM service_checks WHERE t < ?').bind(check.t - KEEP_RAW_MS),
+    db.prepare('DELETE FROM service_days WHERE date < ?').bind(dayOf(check.t - (KEEP_DAYS - 1) * DAY)),
+  ]);
+}
 
+async function serviceSummary(db, latest, now) {
   const services = {};
   for (const name of SERVICES) {
     const current = latest
@@ -89,6 +87,28 @@ export async function buildSummary(db, now) {
         '30d': percent(await serviceWindow(30)),
       },
     };
+  }
+  return services;
+}
+
+// Uptime windows count the checks that actually ran. If Cloudflare skipped
+// some runs, those minutes are unknown, not "up" and not "down".
+export async function buildSummary(db, now) {
+  const latest = await db.prepare('SELECT t, up, ms, code FROM checks ORDER BY t DESC LIMIT 1').first();
+  const lastUp = await db.prepare('SELECT t, details FROM checks WHERE up = 1 ORDER BY t DESC LIMIT 1').first();
+  const last24h = await db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(up), 0) AS up FROM checks WHERE t > ?')
+    .bind(now - 24 * HOUR).first();
+  const window = (days) => db.prepare('SELECT COALESCE(SUM(total), 0) AS total, COALESCE(SUM(up), 0) AS up FROM days WHERE date >= ?')
+    .bind(dayOf(now - (days - 1) * DAY)).first();
+  const { results: days } = await db.prepare('SELECT date, total, up, ms_sum, ms_n FROM days WHERE date >= ? ORDER BY date')
+    .bind(dayOf(now - (BAR_DAYS - 1) * DAY)).all();
+
+  // Per-service numbers are a bonus; never let them break the summary.
+  let services = null;
+  try {
+    services = await serviceSummary(db, latest, now);
+  } catch (err) {
+    console.error(`service summary failed: ${err.message}`);
   }
 
   return {

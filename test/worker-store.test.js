@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeD1 } from './helpers/fake-d1.js';
-import { recordCheck, buildSummary, saveSummary, loadSummary, dayOf, percent, serviceUp } from '../worker/src/store.js';
+import { recordCheck, recordServices, buildSummary, saveSummary, loadSummary, dayOf, percent, serviceUp } from '../worker/src/store.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -148,6 +148,7 @@ test('loadSummary returns null before the first check', async () => {
 // --- per-service uptime ---------------------------------------------------
 
 const withServices = (t, services) => ({ t, up: true, ms: 100, code: 200, details: { ...DETAILS, services: { ...ALL_UP, ...services } } });
+const recordBoth = async (db, check) => { await recordCheck(db, check); await recordServices(db, check); };
 
 test('serviceUp needs the unit active AND the service answering', () => {
   assert.equal(serviceUp({ services: ALL_UP }, 'minecraft'), true);
@@ -159,9 +160,9 @@ test('serviceUp needs the unit active AND the service answering', () => {
 
 test('each service gets its own current state and uptime', async () => {
   const db = fakeD1();
-  await recordCheck(db, withServices(T0 - 10 * 60_000, {}));
-  await recordCheck(db, withServices(T0 - 5 * 60_000, { minecraft: { unit: 'active', responding: false } }));
-  await recordCheck(db, withServices(T0, { minecraft: { unit: 'active', responding: false } }));
+  await recordBoth(db, withServices(T0 - 10 * 60_000, {}));
+  await recordBoth(db, withServices(T0 - 5 * 60_000, { minecraft: { unit: 'active', responding: false } }));
+  await recordBoth(db, withServices(T0, { minecraft: { unit: 'active', responding: false } }));
   const s = await buildSummary(db, T0);
   assert.deepEqual(s.services.minecraft, { up: false, uptime: { '24h': 33.33, '7d': 33.33, '30d': 33.33 } });
   assert.deepEqual(s.services.nginx, { up: true, uptime: { '24h': 100, '7d': 100, '30d': 100 } });
@@ -170,8 +171,8 @@ test('each service gets its own current state and uptime', async () => {
 
 test('when the server itself is unreachable, every service counts as down', async () => {
   const db = fakeD1();
-  await recordCheck(db, withServices(T0 - 5 * 60_000, {}));
-  await recordCheck(db, down(T0));
+  await recordBoth(db, withServices(T0 - 5 * 60_000, {}));
+  await recordBoth(db, down(T0));
   const s = await buildSummary(db, T0);
   for (const name of ['email-pixel-tracker', 'nginx', 'minecraft']) {
     assert.deepEqual(s.services[name], { up: false, uptime: { '24h': 50, '7d': 50, '30d': 50 } }, name);
@@ -180,9 +181,9 @@ test('when the server itself is unreachable, every service counts as down', asyn
 
 test('per-service history is pruned like the main history', async () => {
   const db = fakeD1();
-  await recordCheck(db, withServices(T0 - 49 * HOUR, {}));
-  await recordCheck(db, withServices(T0 - 91 * DAY, {}));
-  await recordCheck(db, withServices(T0, {}));
+  await recordBoth(db, withServices(T0 - 49 * HOUR, {}));
+  await recordBoth(db, withServices(T0 - 91 * DAY, {}));
+  await recordBoth(db, withServices(T0, {}));
   const raw = db.sqlite.prepare('SELECT COUNT(DISTINCT t) AS n FROM service_checks').get().n;
   const days = db.sqlite.prepare('SELECT COUNT(DISTINCT date) AS n FROM service_days').get().n;
   assert.equal(raw, 1);
@@ -192,4 +193,15 @@ test('per-service history is pruned like the main history', async () => {
 test('services with no checks yet are reported as unknown', async () => {
   const s = await buildSummary(fakeD1(), T0);
   assert.deepEqual(s.services.minecraft, { up: null, uptime: { '24h': null, '7d': null, '30d': null } });
+});
+
+test('a database without the service tables still records the main check', async () => {
+  // Simulates deploying the Worker before migration 0002 is applied.
+  const db = fakeD1({ only: ['0001_init.sql'] });
+  await recordCheck(db, up(T0));
+  await assert.rejects(recordServices(db, up(T0)), /no such table/);
+  const s = await buildSummary(db, T0);
+  assert.equal(s.latest.up, true);
+  assert.equal(s.uptime['24h'], 100);
+  assert.equal(s.services, null);
 });

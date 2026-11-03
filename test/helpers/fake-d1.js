@@ -8,9 +8,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const MIGRATIONS = new URL('../../worker/migrations/', import.meta.url);
 
-export function fakeD1() {
+// `only` limits which migrations run, to simulate a database that hasn't
+// been migrated yet.
+export function fakeD1({ only } = {}) {
   const db = new DatabaseSync(':memory:');
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql') && (!only || only.includes(f))).sort()) {
     db.exec(readFileSync(new URL(file, MIGRATIONS), 'utf8'));
   }
 
