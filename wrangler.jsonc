@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "plorbserver-status",
+  "main": "worker/src/index.js",
+  "compatibility_date": "2026-11-01",
+
+  // The page (site/) is served as static assets; requests that don't match
+  // a file (like /api/status) fall through to the Worker.
+  "assets": { "directory": "./site" },
+
+  // Only status.plorbus.dev, not a *.workers.dev address.
+  "routes": [{ "pattern": "status.plorbus.dev", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+
+  // The uptime check.
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  "vars": { "API_URL": "https://api.plorbus.dev/" },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "plorbserver-status",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
+
+  "observability": { "enabled": true }
+}
