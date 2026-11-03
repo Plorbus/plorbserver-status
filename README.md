@@ -112,7 +112,7 @@ site/                              the page (plain HTML + JS)
 test/                              node:test suites
 ```
 
-Server setup steps are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Design decisions and trade-offs: [`docs/DESIGN.md`](docs/DESIGN.md). Server setup: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## License
 
