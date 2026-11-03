@@ -1,0 +1,9 @@
+# /etc/systemd/system/cloudflared-restart.service
+# Started only by cloudflared-restart.path. try-restart does nothing if the
+# tunnel isn't running.
+[Unit]
+Description=Restart cloudflared after an upgrade
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl try-restart cloudflared.service

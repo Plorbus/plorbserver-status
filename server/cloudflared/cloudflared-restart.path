@@ -1,0 +1,14 @@
+# /etc/systemd/system/cloudflared-restart.path
+# The cloudflared package doesn't restart the service when it's upgraded,
+# so after an automatic upgrade the old binary would keep running. This
+# watches the binary: apt/dpkg replaces it by renaming a new file over it,
+# which triggers cloudflared-restart.service once per upgrade.
+[Unit]
+Description=Restart cloudflared when /usr/bin/cloudflared is replaced
+
+[Path]
+PathChanged=/usr/bin/cloudflared
+Unit=cloudflared-restart.service
+
+[Install]
+WantedBy=multi-user.target

@@ -57,6 +57,16 @@ sudo cp /opt/plorbserver-status/server/cloudflared/cloudflared.service /etc/syst
 sudo systemctl daemon-reload && sudo systemctl enable --now cloudflared
 ```
 
+Keep it updated automatically. The package doesn't restart the service on
+upgrade, so a path unit does that when the binary is replaced:
+
+```
+sudo cp /opt/plorbserver-status/server/cloudflared/cloudflared-restart.{path,service} /etc/systemd/system/
+sudo cp /opt/plorbserver-status/server/cloudflared/52unattended-upgrades-cloudflared /etc/apt/apt.conf.d/
+sudo systemctl daemon-reload && sudo systemctl enable --now cloudflared-restart.path
+sudo unattended-upgrade --dry-run --debug 2>&1 | grep -iE 'allowed origins|cloudflared'   # pattern listed
+```
+
 Then delete `cert.pem` (from `tunnel login`) and the local copy of the
 credentials file. `cert.pem` can create and delete tunnels and DNS records
 for the whole account, and running a tunnel doesn't need it.

@@ -1,0 +1,9 @@
+// /etc/apt/apt.conf.d/52unattended-upgrades-cloudflared
+// Let unattended-upgrades install cloudflared from Cloudflare's apt repo.
+// That repo's Release file has "Origin: cloudflared" and "Codename: any" but
+// no Suite, so the "origin:suite" shorthand of Allowed-Origins can't match
+// it; Origins-Pattern can. cloudflared-restart.path restarts the tunnel
+// after an upgrade.
+Unattended-Upgrade::Origins-Pattern {
+        "origin=cloudflared,codename=any";
+};

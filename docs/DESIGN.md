@@ -71,6 +71,13 @@ Choices around `cloudflared`:
   0400)**, and exists only on the server. The login certificate from setup
   (which can create and delete tunnels and DNS for the whole account) was
   deleted once the tunnel existed.
+- **Updated automatically, and restarted after updates.** The service runs
+  with `--no-autoupdate` so the package manager is the only thing that
+  changes the binary. `unattended-upgrades` is allowed to install it from
+  Cloudflare's repo. The package doesn't restart the service itself, so a
+  systemd path unit watches `/usr/bin/cloudflared` and restarts the tunnel
+  when an upgrade replaces it. (Tested: it fires once per replacement, and
+  not at boot.)
 
 ## 4. The status service
 
@@ -158,9 +165,6 @@ loads the real migration file, so the queries tested are the ones deployed.
 
 ## 10. Open questions
 
-- **cloudflared updates are manual for now.** Automatic updates would also
-  need a restart of the tunnel after each upgrade (the package doesn't do
-  that), so it's a deliberate choice, not a default.
 - **The email tracker still answers on its old Tailscale Funnel address**
   (whole app, including admin) so that emails already sent keep working.
   Retiring it, and logging the visitor's real IP from Cloudflare's
