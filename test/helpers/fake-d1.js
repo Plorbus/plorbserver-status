@@ -1,16 +1,18 @@
 // A small stand-in for Cloudflare D1, backed by Node's built-in SQLite, so
-// the Worker's real SQL (and the real migration file) run in tests.
+// the Worker's real SQL (and the real migration files, in order) run in tests.
 // It implements only the D1 calls the Worker uses: prepare/bind/first/all/run
 // and batch (all-or-nothing, like D1).
 
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
-const MIGRATION = new URL('../../worker/migrations/0001_init.sql', import.meta.url);
+const MIGRATIONS = new URL('../../worker/migrations/', import.meta.url);
 
 export function fakeD1() {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(MIGRATION, 'utf8'));
+  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+    db.exec(readFileSync(new URL(file, MIGRATIONS), 'utf8'));
+  }
 
   const statement = (sql, params = []) => ({
     bind: (...values) => {

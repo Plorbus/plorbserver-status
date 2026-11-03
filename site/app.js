@@ -1,4 +1,4 @@
-import { formatDuration, formatPercent, dailyUptime, isStale } from './format.js';
+import { formatDuration, formatPercent, dailyUptime, isStale, serviceLines } from './format.js';
 
 const $ = (id) => document.getElementById(id);
 const when = (iso) => new Date(iso).toLocaleString();
@@ -36,6 +36,9 @@ function render(data, now) {
   $('up-7d').textContent = formatPercent(data.uptime['7d']);
   $('up-30d').textContent = formatPercent(data.uptime['30d']);
 
+  const services = serviceLines(data.services);
+  $('services').replaceChildren(...(services.length ? services : ['no data yet']).map(listItem));
+
   const daily = dailyUptime(data.days);
   $('daily').replaceChildren(...(daily.length ? daily : ['no checks yet']).map(listItem));
 
@@ -43,7 +46,6 @@ function render(data, now) {
   const items = [];
   if (latest.up && latest.ms != null) items.push(`Response time: ${latest.ms} ms (Cloudflare to the server and back)`);
   if (d) {
-    for (const [name, state] of Object.entries(d.services)) items.push(`${name}: ${state}`);
     if (d.load_1m != null) items.push(`CPU load (1 min average): ${d.load_1m} across ${d.cpus} CPUs`);
     if (d.memory_used_percent != null) items.push(`Memory used: ${d.memory_used_percent}%`);
     if (d.disk_used_percent != null) items.push(`Disk used: ${d.disk_used_percent}%`);

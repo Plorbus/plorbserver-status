@@ -8,7 +8,11 @@ const GOOD_BODY = {
   generated_at: '2026-11-02T20:00:00.000Z',
   boot_time: '2026-09-10T02:10:11.000Z',
   uptime_seconds: 4665857,
-  services: { 'email-pixel-tracker': 'active', nginx: 'active' },
+  services: {
+    'email-pixel-tracker': { unit: 'active', responding: true },
+    nginx: { unit: 'active', responding: true },
+    minecraft: { unit: 'active', responding: false },
+  },
   load: { '1m': 0.14, '5m': 0.08, '15m': 0.01, cpus: 16 },
   memory_used_percent: 39,
   disk_used_percent: 4,
@@ -27,7 +31,11 @@ test('a 200 with status "up" is up, with response time and sanitized details', a
   assert.equal(r.code, 200);
   assert.equal(r.ms, 120);
   assert.equal(r.details.boot_time, '2026-09-10T02:10:11.000Z');
-  assert.deepEqual(r.details.services, { 'email-pixel-tracker': 'active', nginx: 'active' });
+  assert.deepEqual(r.details.services, {
+    'email-pixel-tracker': { unit: 'active', responding: true },
+    nginx: { unit: 'active', responding: true },
+    minecraft: { unit: 'active', responding: false },
+  });
 });
 
 for (const [name, fetchImpl, code] of [
@@ -57,7 +65,11 @@ test('checkOnce passes a timeout signal and does not follow redirects', async ()
 test('pickDetails drops anything malformed instead of storing it', () => {
   const d = pickDetails({
     boot_time: 'yesterday<script>',
-    services: { 'email-pixel-tracker': 'ACTIVE; rm -rf', nginx: 'active', sshd: 'active' },
+    services: {
+      'email-pixel-tracker': { unit: 'ACTIVE; rm -rf', responding: 'yes' },
+      nginx: { unit: 'active', responding: true },
+      sshd: { unit: 'active', responding: true },
+    },
     load: { '1m': 'NaN', cpus: 16 },
     memory_used_percent: Infinity,
     disk_used_percent: 4,
@@ -65,11 +77,24 @@ test('pickDetails drops anything malformed instead of storing it', () => {
   });
   assert.deepEqual(d, {
     boot_time: null,
-    services: { 'email-pixel-tracker': 'unknown', nginx: 'active' },
+    services: {
+      'email-pixel-tracker': { unit: 'unknown', responding: null },
+      nginx: { unit: 'active', responding: true },
+      minecraft: { unit: 'unknown', responding: null },
+    },
     load_1m: null,
     cpus: 16,
     memory_used_percent: null,
     disk_used_percent: 4,
+  });
+});
+
+test('pickDetails still reads the older API shape (unit state strings)', () => {
+  const d = pickDetails({ services: { 'email-pixel-tracker': 'active', nginx: 'failed' } });
+  assert.deepEqual(d.services, {
+    'email-pixel-tracker': { unit: 'active', responding: null },
+    nginx: { unit: 'failed', responding: null },
+    minecraft: { unit: 'unknown', responding: null },
   });
 });
 

@@ -5,7 +5,9 @@
 
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 const UNIT_STATE = /^[a-z]{3,12}$/;
-const SERVICES = ['email-pixel-tracker', 'nginx'];
+// Everything hosted on the box, in display order. The status API reports
+// each as { unit: "<systemd state>", responding: <answered its probe> }.
+export const SERVICES = ['email-pixel-tracker', 'nginx', 'minecraft'];
 
 const finite = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
@@ -16,8 +18,11 @@ export function pickDetails(body) {
   return {
     boot_time: typeof body?.boot_time === 'string' && ISO_TIME.test(body.boot_time) ? body.boot_time : null,
     services: Object.fromEntries(SERVICES.map((name) => {
-      const state = body?.services?.[name];
-      return [name, typeof state === 'string' && UNIT_STATE.test(state) ? state : 'unknown'];
+      const raw = body?.services?.[name];
+      // Older API versions sent just the unit state as a string.
+      const unit = typeof raw === 'string' ? raw : raw?.unit;
+      const responding = typeof raw?.responding === 'boolean' ? raw.responding : null;
+      return [name, { unit: typeof unit === 'string' && UNIT_STATE.test(unit) ? unit : 'unknown', responding }];
     })),
     load_1m: finite(body?.load?.['1m']),
     cpus: finite(body?.load?.cpus),

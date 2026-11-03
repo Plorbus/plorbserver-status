@@ -1,5 +1,7 @@
 // Everything the Worker keeps lives in D1 (Cloudflare's SQLite). See
-// worker/migrations/0001_init.sql for the tables.
+// worker/migrations/ for the tables.
+
+import { SERVICES } from './check.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -14,12 +16,33 @@ export function percent({ total, up }) {
   return total ? Math.round((up / total) * 10_000) / 100 : null;
 }
 
+// A service is up only if its unit is active AND it answered its probe.
+// If the server itself didn't answer, there are no details, so it's down.
+export function serviceUp(details, name) {
+  const service = details?.services?.[name];
+  return service?.unit === 'active' && service?.responding === true;
+}
+
 // Store one check, count it in its day, and drop anything too old. All in
 // one batch, so a failure leaves the tables exactly as they were.
 export async function recordCheck(db, check) {
   const up = check.up ? 1 : 0;
   const hasMs = check.ms == null ? 0 : 1;
+  const day = dayOf(check.t);
+  const perService = SERVICES.flatMap((name) => {
+    const serviceIsUp = check.up && serviceUp(check.details, name) ? 1 : 0;
+    return [
+      db.prepare('INSERT OR REPLACE INTO service_checks (t, service, up) VALUES (?, ?, ?)')
+        .bind(check.t, name, serviceIsUp),
+      db.prepare(`INSERT INTO service_days (date, service, total, up) VALUES (?, ?, 1, ?)
+                  ON CONFLICT (date, service) DO UPDATE SET total = total + 1, up = up + excluded.up`)
+        .bind(day, name, serviceIsUp),
+    ];
+  });
   return db.batch([
+    ...perService,
+    db.prepare('DELETE FROM service_checks WHERE t < ?').bind(check.t - KEEP_RAW_MS),
+    db.prepare('DELETE FROM service_days WHERE date < ?').bind(dayOf(check.t - (KEEP_DAYS - 1) * DAY)),
     db.prepare('INSERT OR REPLACE INTO checks (t, up, ms, code, details) VALUES (?, ?, ?, ?, ?)')
       .bind(check.t, up, check.ms ?? null, check.code ?? null, check.details ? JSON.stringify(check.details) : null),
     db.prepare(`INSERT INTO days (date, total, up, ms_sum, ms_n) VALUES (?, 1, ?, ?, ?)
@@ -50,6 +73,24 @@ export async function buildSummary(db, now) {
   const { results: days } = await db.prepare('SELECT date, total, up, ms_sum, ms_n FROM days WHERE date >= ? ORDER BY date')
     .bind(dayOf(now - (BAR_DAYS - 1) * DAY)).all();
 
+  const services = {};
+  for (const name of SERVICES) {
+    const current = latest
+      ? await db.prepare('SELECT up FROM service_checks WHERE service = ? AND t = ?').bind(name, latest.t).first()
+      : null;
+    const serviceWindow = (n) => db.prepare('SELECT COALESCE(SUM(total), 0) AS total, COALESCE(SUM(up), 0) AS up FROM service_days WHERE service = ? AND date >= ?')
+      .bind(name, dayOf(now - (n - 1) * DAY)).first();
+    services[name] = {
+      up: current ? current.up === 1 : null,
+      uptime: {
+        '24h': percent(await db.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(up), 0) AS up FROM service_checks WHERE service = ? AND t > ?')
+          .bind(name, now - 24 * HOUR).first()),
+        '7d': percent(await serviceWindow(7)),
+        '30d': percent(await serviceWindow(30)),
+      },
+    };
+  }
+
   return {
     generated_at: iso(now),
     latest: latest && { t: iso(latest.t), up: latest.up === 1, ms: latest.ms, code: latest.code },
@@ -59,6 +100,7 @@ export async function buildSummary(db, now) {
       '7d': percent(await window(7)),
       '30d': percent(await window(30)),
     },
+    services,
     days: days.map((d) => ({
       date: d.date,
       up_pct: percent(d),

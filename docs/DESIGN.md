@@ -87,16 +87,19 @@ Choices around `cloudflared`:
   nothing third-party to audit.
 - **Listens on `127.0.0.1` only.** Only `cloudflared` on the same machine
   can reach it.
-- **Says as little as possible:** up, boot time, uptime, whether two named
-  services are active, load average, memory % and disk % (rounded). No IPs,
+- **Says as little as possible:** up, boot time, uptime, each hosted
+  service's systemd state and whether it answered, load average, memory %
+  and disk % (rounded). No IPs,
   hostnames, usernames or process lists.
 - **Request data never reaches a command or a file.** The handler only looks
   at the method and whether the path is `/`. The one command it runs is
-  `systemctl is-active` for two names from a hardcoded list, through
+  `systemctl is-active` for three names from a hardcoded list, through
   `execFile` (no shell), with a 2-second timeout. If systemd hangs, that
   service shows `unknown` and the request still answers.
 - **Cached for 5 seconds**, and simultaneous requests share one in-flight
   read, so it can't be hammered into doing work.
+- **Checks that each hosted service answers, not just that it's running**
+  (section 5), over loopback only.
 - **Its own non-root system user, plus a strict systemd sandbox**
   (read-only filesystem, no home directories, no other tenants' files, no
   privileges, loopback-only networking). `systemd-analyze security` scores
@@ -108,7 +111,41 @@ Choices around `cloudflared`:
   `DynamicUser` broke it. A normal system user under the identical sandbox
   works.
 
-## 5. What counts as "up"
+## 5. Every hosted thing gets its own status
+
+The page shows each thing the box hosts with its own up/down and its own
+24-hour, 7-day and 30-day uptime:
+
+| Thing | Up means |
+|---|---|
+| Email tracker | systemd unit active **and** an HTTP request to `127.0.0.1:3000/` gets any answer below 500 |
+| Website (nginx) | unit active **and** `127.0.0.1:80` answers |
+| Minecraft server | unit active **and** it answers a real Server List Ping (the request the game's multiplayer menu sends) on `127.0.0.1:25565` |
+
+- **"Running" isn't enough.** systemd saying a unit is active only means
+  the process exists. A hung server is still "active". So each one is also
+  asked a question it has to answer.
+- **The tracker is probed at `/`, not `/pixel/`.** A pixel request would log
+  a fake email open every few minutes. `/` gets Express's built-in 404, which
+  proves the app is alive and logs nothing.
+- **Minecraft is checked from inside the server, not from outside.**
+  Checking it the way friends connect would mean storing the home DDNS
+  hostname in Cloudflare and pinging the home IP from outside every 5
+  minutes. The local check needs no secret and adds no exposure. Its blind
+  spot: it can't see a broken router port forward or DDNS while the box
+  itself is fine. An external check could be added with the hostname kept
+  as a Cloudflare secret. It reports no player names or counts.
+- **A service is only up if the server was reachable.** If the status API
+  doesn't answer, every service counts as down for that check, so no
+  service can look healthier than the box it runs on. (Edge case: if only
+  the tunnel died, Minecraft, which doesn't use the tunnel, would really
+  still be up but count as down.)
+- **Deploy order matters.** The checker treats a service as down unless the
+  server proves it answered, and older server versions didn't report that.
+  So the server is updated first, then the Worker, or the history would
+  start with false outages.
+
+## 6. What counts as "up" for the server
 
 - Up means **HTTP 200 and a JSON body saying `"status": "up"`**. A tunnel
   error page, the 404 catch-all, a timeout (10 s), or no answer at all are
@@ -120,7 +157,7 @@ Choices around `cloudflared`:
   must be numbers). A broken or compromised server can't put arbitrary text
   in the database.
 
-## 6. Storing history without it growing forever
+## 7. Storing history without it growing forever
 
 - **Raw checks are kept for 48 hours**, enough for the 24-hour figure.
 - **Every check also adds to a one-row-per-day total (UTC)**, kept 90 days.
@@ -134,7 +171,7 @@ Choices around `cloudflared`:
 - After every check the Worker rebuilds the page's summary and stores it as
   one row, so a page view costs a single database read.
 
-## 7. The page
+## 8. The page
 
 - **Deliberately plain HTML, no framework, no stylesheet** (one rule stops
   photos overflowing on phones). Styling comes later.
@@ -145,7 +182,7 @@ Choices around `cloudflared`:
   While down, it says when the server was last seen up.
 - Data is inserted with `textContent` only, never as HTML.
 
-## 8. Photos
+## 9. Photos
 
 - Originals never enter git (`.gitignore`), and cleaned copies are made
   outside the repo first.
@@ -157,13 +194,13 @@ Choices around `cloudflared`:
 - `npm run deploy` refuses if `site/` contains anything not committed,
   because the deploy tool uploads whatever is in the folder.
 
-## 9. Tests
+## 10. Tests
 
 `npm test`, built-in Node test runner, no dependencies. The Worker's SQL
 runs against Node's built-in SQLite through a small stand-in for D1 that
 loads the real migration file, so the queries tested are the ones deployed.
 
-## 10. Open questions
+## 11. Open questions
 
 - **The email tracker still answers on its old Tailscale Funnel address**
   (whole app, including admin) so that emails already sent keep working.

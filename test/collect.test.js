@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import {
-  UNITS, parseBootTime, parseUptimeSeconds, parseMemoryPercent, diskPercent,
+  UNITS, SERVICE_NAMES, parseBootTime, parseUptimeSeconds, parseMemoryPercent, diskPercent,
   unitState, snapshot, cached,
 } from '../server/collect.js';
 
@@ -76,6 +76,7 @@ const fakeDeps = {
   read: async (path) => ({ '/proc/stat': PROC_STAT, '/proc/uptime': PROC_UPTIME, '/proc/meminfo': PROC_MEMINFO })[path],
   fsStats: async () => ({ blocks: 1000, bfree: 600, bavail: 550 }),
   state: async () => 'active',
+  probe: async () => true,
   loadavg: () => [0.14159, 0.08, 0.012],
   cpus: () => 16,
 };
@@ -87,12 +88,29 @@ test('snapshot has exactly the public fields, rounded', async () => {
     generated_at: '2026-11-02T20:00:00.000Z',
     boot_time: '2026-09-10T02:10:11.000Z',
     uptime_seconds: 4665857,
-    services: { 'email-pixel-tracker': 'active', nginx: 'active' },
+    services: {
+      'email-pixel-tracker': { unit: 'active', responding: true },
+      nginx: { unit: 'active', responding: true },
+      minecraft: { unit: 'active', responding: true },
+    },
     load: { '1m': 0.14, '5m': 0.08, '15m': 0.01, cpus: 16 },
     memory_used_percent: 39,
     disk_used_percent: 43,
   });
-  assert.deepEqual(Object.keys(s.services), [...UNITS]);
+  assert.deepEqual(Object.keys(s.services), [...SERVICE_NAMES]);
+});
+
+test('snapshot reports a service whose process runs but does not answer', async () => {
+  const s = await snapshot({ ...fakeDeps, probe: async (name) => name !== 'minecraft' });
+  assert.deepEqual(s.services.minecraft, { unit: 'active', responding: false });
+  assert.deepEqual(s.services.nginx, { unit: 'active', responding: true });
+});
+
+test('snapshot probes each service by name, and only the known ones', async () => {
+  const probed = [];
+  await snapshot({ ...fakeDeps, probe: async (name) => { probed.push(name); return true; } });
+  assert.deepEqual(probed.sort(), ['email-pixel-tracker', 'minecraft', 'nginx']);
+  assert.deepEqual([...UNITS].sort(), ['email-pixel-tracker', 'minecraft', 'nginx']);
 });
 
 test('the real snapshot leaks no hostname, username, or IP address', async () => {

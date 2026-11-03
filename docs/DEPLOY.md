@@ -73,12 +73,16 @@ for the whole account, and running a tunnel doesn't need it.
 
 ## 3. Worker + page
 
+**Order matters:** update the server (step 1's `git pull` + restart) before
+deploying the Worker whenever the API's shape changes. The checker counts a
+service as down unless the server proves it answered.
+
 ```
 npx wrangler login
 # The account needs a workers.dev subdomain before cron triggers can be
 # saved: open Workers & Pages in the dashboard once. This Worker doesn't use it.
 npx wrangler d1 create plorbserver-status          # put the ID in wrangler.jsonc
-npx wrangler d1 migrations apply plorbserver-status --remote
+npx wrangler d1 migrations apply plorbserver-status --remote   # applies any new worker/migrations/*.sql
 npm run deploy      # runs the tests, refuses if site/ has uncommitted files, then wrangler deploy
                     # (first deploy also creates status.plorbus.dev + its certificate)
 npx wrangler logout

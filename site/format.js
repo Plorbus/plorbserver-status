@@ -38,3 +38,21 @@ export function isStale(lastCheckIso, nowMs, maxMinutes = 30) {
   if (!lastCheckIso) return true;
   return nowMs - Date.parse(lastCheckIso) > maxMinutes * 60_000;
 }
+
+const LABELS = {
+  'email-pixel-tracker': 'Email tracker',
+  nginx: 'Website (nginx)',
+  minecraft: 'Minecraft server',
+};
+
+// "Email tracker: up. Uptime 100% (24 hours), 99.5% (7 days), 99.9% (30 days)"
+export function serviceLines(services) {
+  if (!services) return [];
+  return Object.entries(services).map(([name, service]) => {
+    const label = LABELS[name] ?? name;
+    if (service.up == null) return `${label}: no data yet`;
+    const u = service.uptime;
+    return `${label}: ${service.up ? 'up' : 'DOWN'}. Uptime ${formatPercent(u['24h'])} (24 hours), `
+      + `${formatPercent(u['7d'])} (7 days), ${formatPercent(u['30d'])} (30 days)`;
+  });
+}

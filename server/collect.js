@@ -2,15 +2,25 @@
 //
 // Nothing in this file ever sees request data. The HTTP layer calls
 // snapshot() with no arguments, so no part of a URL, header, or body can
-// reach a file path or a command line. The only command run is
-// `systemctl is-active` for unit names from the fixed UNITS list, and it
+// reach a file path, a port, or a command line. The only command run is
+// `systemctl is-active` for unit names from the fixed SERVICES list, and it
 // runs through execFile, which never starts a shell.
 
 import { execFile } from 'node:child_process';
 import { readFile, statfs } from 'node:fs/promises';
 import os from 'node:os';
+import { httpProbe, minecraftProbe } from './probes.js';
 
-export const UNITS = Object.freeze(['email-pixel-tracker', 'nginx']);
+// Everything hosted on the box, how to ask systemd about it, and how to
+// check it actually answers. All probes go to 127.0.0.1 only.
+const SERVICES = Object.freeze({
+  'email-pixel-tracker': { unit: 'email-pixel-tracker', probe: () => httpProbe(3000) },
+  nginx: { unit: 'nginx', probe: () => httpProbe(80) },
+  minecraft: { unit: 'minecraft', probe: () => minecraftProbe(25565) },
+});
+
+export const SERVICE_NAMES = Object.freeze(Object.keys(SERVICES));
+export const UNITS = Object.freeze(Object.values(SERVICES).map((s) => s.unit));
 
 const KNOWN_STATES = new Set([
   'active', 'inactive', 'failed', 'activating', 'deactivating', 'reloading', 'maintenance',
@@ -70,16 +80,18 @@ export async function snapshot({
   now = () => new Date(),
   read = (path) => readFile(path, 'utf8'),
   fsStats = () => statfs('/'),
-  state = (name) => unitState(name),
+  state = (name) => unitState(SERVICES[name].unit),
+  probe = (name) => SERVICES[name].probe(),
   loadavg = () => os.loadavg(),
   cpus = () => os.availableParallelism(),
 } = {}) {
-  const [procStat, procUptime, meminfo, disk, ...states] = await Promise.all([
+  const [procStat, procUptime, meminfo, disk, states, answers] = await Promise.all([
     read('/proc/stat'),
     read('/proc/uptime'),
     read('/proc/meminfo'),
     fsStats(),
-    ...UNITS.map((name) => state(name)),
+    Promise.all(SERVICE_NAMES.map((name) => state(name))),
+    Promise.all(SERVICE_NAMES.map((name) => probe(name))),
   ]);
   const [one, five, fifteen] = loadavg();
   return {
@@ -87,7 +99,7 @@ export async function snapshot({
     generated_at: now().toISOString(),
     boot_time: parseBootTime(procStat).toISOString(),
     uptime_seconds: parseUptimeSeconds(procUptime),
-    services: Object.fromEntries(UNITS.map((name, i) => [name, states[i]])),
+    services: Object.fromEntries(SERVICE_NAMES.map((name, i) => [name, { unit: states[i], responding: answers[i] }])),
     load: { '1m': round2(one), '5m': round2(five), '15m': round2(fifteen), cpus: cpus() },
     memory_used_percent: parseMemoryPercent(meminfo),
     disk_used_percent: diskPercent(disk),

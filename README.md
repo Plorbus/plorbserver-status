@@ -24,8 +24,9 @@ anything on my home network.
 
 1. **Status service** (`server/`). A small Node service on the server
    that answers `GET /` with coarse health JSON: up, boot time, uptime,
-   whether two systemd services are active, load average, memory % and
-   disk %. It binds `127.0.0.1` only, runs as its own non-root system user
+   load average, memory % and disk %, and for each hosted service (email
+   tracker, website, Minecraft) whether it's running **and** whether it
+   actually answered a test request on `127.0.0.1`. It binds `127.0.0.1` only, runs as its own non-root system user
    under a systemd sandbox, and caches its answer for 5 seconds so it can't
    be hammered. It has no npm dependencies.
 2. **Cloudflare Tunnel.** `cloudflared` on the server opens an *outbound*
@@ -34,8 +35,9 @@ anything on my home network.
    the firewall for any of this.
 3. **Checker + page** (`worker/`, `site/`). A Cloudflare Worker runs every 5
    minutes, calls the API with a 10-second timeout (one retry), and records
-   up/down and response time in D1 (Cloudflare's SQLite). The same Worker
-   serves the page and a small `/api/status` JSON summary.
+   up/down and response time in D1 (Cloudflare's SQLite), for the server
+   and for each service. The same Worker serves the page and a small
+   `/api/status` JSON summary.
 
 ## Design decisions
 
@@ -55,8 +57,8 @@ reachable through the tunnel at all.
 **The public API says as little as possible.** No IP addresses, hostnames,
 usernames, or process lists. Numbers are rounded (memory and disk as whole
 percentages). Nothing from the request (path, query, headers) reaches any
-file read or command: the one command it runs is `systemctl is-active` for
-two unit names from a hardcoded list, through `execFile` (no shell). A test
+file read, port, or command: the one command it runs is `systemctl
+is-active` for three unit names from a hardcoded list, through `execFile` (no shell). A test
 fails if a snapshot taken on the test machine contains that machine's
 hostname or username, or anything shaped like an IP address.
 
@@ -86,9 +88,9 @@ own dark mode.
   box, `cloudflared`) are all caught.
 - **5-minute resolution.** An outage shorter than that can fall between
   checks.
-- **"Up" means the status service answered through the tunnel.** It
-  reports the tracker and nginx unit states, but doesn't test them end to
-  end.
+- **Services are checked from inside the server.** The Minecraft check
+  proves the game answers, but not that the router's port forward works.
+  See `docs/DESIGN.md` section 5.
 
 ## Running the tests
 
