@@ -5,10 +5,11 @@
   "description": "Public uptime page for a home server: a read-only status API behind a Cloudflare Tunnel, checked from Cloudflare's network by a Worker.",
   "scripts": {
     "test": "node --test --no-warnings=ExperimentalWarning test/*.test.js",
+    "predeploy": "npm test && node scripts/check-site-clean.js",
     "deploy": "wrangler deploy"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "devDependencies": {
     "wrangler": "4.156.2"

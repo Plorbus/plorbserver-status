@@ -57,8 +57,8 @@ usernames, or process lists. Numbers are rounded (memory and disk as whole
 percentages). Nothing from the request (path, query, headers) reaches any
 file read or command: the one command it runs is `systemctl is-active` for
 two unit names from a hardcoded list, through `execFile` (no shell). A test
-fails if the output ever contains the machine's hostname, username, or
-anything shaped like an IP.
+fails if a snapshot taken on the test machine contains that machine's
+hostname or username, or anything shaped like an IP address.
 
 **Uptime math counts real checks.** If a scheduled run is skipped, that
 time is unknown, not up and not down. So percentages are `up checks /
@@ -68,6 +68,11 @@ kept 90 days. That *is* the rollup, so nothing ever needs a batch job to
 summarize old data. After every check the Worker rebuilds the page's
 summary and stores it as a single row, so a page view costs one database
 read.
+
+**Photos are checked, not trusted.** A test walks the bytes of every JPEG
+under `site/` and fails on any metadata segment (Exif, where GPS lives;
+XMP; IPTC; comments). Deploys go through `npm run deploy`, which refuses if
+`site/` contains anything that isn't committed.
 
 **Plain on purpose.** The page is unstyled HTML with no framework.
 `<meta name="color-scheme" content="light dark">` gives it the browser's
@@ -91,7 +96,7 @@ own dark mode.
 npm test
 ```
 
-Node 22+ with no dependencies for the tests themselves. The Worker's SQL
+Node 22.13+ (for the built-in `node:sqlite`), with no dependencies for the tests themselves. The Worker's SQL
 runs against Node's built-in SQLite through a small D1 stand-in
 (`test/helpers/fake-d1.js`), using the real migration file.
 

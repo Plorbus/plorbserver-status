@@ -52,7 +52,7 @@ sudo install -d -o root -g cloudflared -m 0750 /etc/cloudflared
 sudo install -o cloudflared -g cloudflared -m 0400 <TUNNEL-UUID>.json /etc/cloudflared/
 # config: server/cloudflared/config.example.yml with the UUID filled in
 sudo install -o root -g cloudflared -m 0640 config.yml /etc/cloudflared/config.yml
-cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
+sudo -u cloudflared cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate   # /etc/cloudflared is 0750
 sudo cp /opt/plorbserver-status/server/cloudflared/cloudflared.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now cloudflared
 ```
@@ -65,8 +65,11 @@ for the whole account, and running a tunnel doesn't need it.
 
 ```
 npx wrangler login
+# The account needs a workers.dev subdomain before cron triggers can be
+# saved: open Workers & Pages in the dashboard once. This Worker doesn't use it.
 npx wrangler d1 create plorbserver-status          # put the ID in wrangler.jsonc
 npx wrangler d1 migrations apply plorbserver-status --remote
-npx wrangler deploy                                # also creates status.plorbus.dev + its certificate
+npm run deploy      # runs the tests, refuses if site/ has uncommitted files, then wrangler deploy
+                    # (first deploy also creates status.plorbus.dev + its certificate)
 npx wrangler logout
 ```

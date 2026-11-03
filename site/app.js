@@ -13,7 +13,9 @@ function listItem(text) {
 function render(data, now) {
   const { latest, last_up: lastUp } = data;
   if (!latest) {
-    $('status').textContent = 'no checks yet (the first one runs within 5 minutes)';
+    // Don't promise a time here: if the schedule is broken this would
+    // otherwise sit on the page forever looking normal.
+    $('status').textContent = 'unknown, because no check has been recorded yet';
     return;
   }
 

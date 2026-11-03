@@ -95,6 +95,24 @@ test('while down, the summary still reports when the server was last seen up', a
   assert.equal(s.last_up.details.boot_time, DETAILS.boot_time);
 });
 
+test('after more than 48 hours down, the summary still knows when it was last up', async () => {
+  const db = fakeD1();
+  await recordCheck(db, up(T0 - 72 * HOUR));
+  for (let h = 71; h >= 0; h--) await recordCheck(db, down(T0 - h * HOUR));
+  const s = await buildSummary(db, T0);
+  assert.equal(s.last_up.t, new Date(T0 - 72 * HOUR).toISOString());
+  assert.equal(s.last_up.details.boot_time, DETAILS.boot_time);
+  assert.equal(s.uptime['24h'], 0);
+  // The kept "last up" row plus the 49 down checks inside the 48-hour window.
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM checks').get().n, 50);
+});
+
+test('pruning still deletes old rows when the server has never been up', async () => {
+  const db = fakeD1();
+  for (let h = 72; h >= 0; h--) await recordCheck(db, down(T0 - h * HOUR));
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) AS n FROM checks').get().n, 49);
+});
+
 test('days list covers the last 30 days, oldest first, with average response time', async () => {
   const db = fakeD1();
   await recordCheck(db, up(T0 - 40 * DAY)); // outside the bar

@@ -29,7 +29,11 @@ export async function recordCheck(db, check) {
                   ms_sum = ms_sum + excluded.ms_sum,
                   ms_n   = ms_n + excluded.ms_n`)
       .bind(dayOf(check.t), up, check.ms ?? 0, hasMs),
-    db.prepare('DELETE FROM checks WHERE t < ?').bind(check.t - KEEP_RAW_MS),
+    // Keep the newest "up" row even when it's old, so a long outage can
+    // still say when the server was last seen up. `IS NOT` (not `<>`) so
+    // that when there's no up row at all (NULL), old rows still go.
+    db.prepare('DELETE FROM checks WHERE t < ? AND t IS NOT (SELECT MAX(t) FROM checks WHERE up = 1)')
+      .bind(check.t - KEEP_RAW_MS),
     db.prepare('DELETE FROM days WHERE date < ?').bind(dayOf(check.t - (KEEP_DAYS - 1) * DAY)),
   ]);
 }
