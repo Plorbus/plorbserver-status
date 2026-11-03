@@ -1,4 +1,4 @@
-import { formatDuration, formatPercent, historyBar, isStale } from './format.js';
+import { formatDuration, formatPercent, dailyUptime, isStale } from './format.js';
 
 const $ = (id) => document.getElementById(id);
 const when = (iso) => new Date(iso).toLocaleString();
@@ -36,13 +36,8 @@ function render(data, now) {
   $('up-7d').textContent = formatPercent(data.uptime['7d']);
   $('up-30d').textContent = formatPercent(data.uptime['30d']);
 
-  const bar = $('bar');
-  bar.replaceChildren(...historyBar(data.days, now).map((cell) => {
-    const span = document.createElement('span');
-    span.textContent = cell.char;
-    span.title = cell.label;
-    return span;
-  }));
+  const daily = dailyUptime(data.days);
+  $('daily').replaceChildren(...(daily.length ? daily : ['no checks yet']).map(listItem));
 
   const d = lastUp?.details;
   const items = [];

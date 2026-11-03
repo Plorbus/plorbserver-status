@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDuration, formatPercent, historyBar, isStale } from '../site/format.js';
+import { formatDuration, formatPercent, dailyUptime, isStale } from '../site/format.js';
 
 test('formatDuration picks the two largest units', () => {
   assert.equal(formatDuration(0), '0 seconds');
@@ -22,17 +22,24 @@ test('formatPercent', () => {
   assert.equal(formatPercent(null), 'no data yet');
 });
 
-test('historyBar has one cell per day, oldest first, ending today', () => {
+test('dailyUptime lists days that have checks, newest first, as percentages', () => {
   const days = [
     { date: '2026-11-01', up_pct: 100, avg_ms: 120 },
-    { date: '2026-11-02', up_pct: 50, avg_ms: 130 },
+    { date: '2026-11-02', up_pct: 99.65, avg_ms: 130 },
     { date: '2026-10-31', up_pct: 0, avg_ms: null },
   ];
-  const cells = historyBar(days, Date.parse('2026-11-02T12:00:00Z'), 4);
-  assert.deepEqual(cells.map((c) => c.date), ['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02']);
-  assert.deepEqual(cells.map((c) => c.char).join(''), '░▁█▄');
-  assert.equal(cells[0].label, '2026-10-30: no data');
-  assert.equal(cells[3].label, '2026-11-02: 50% up');
+  assert.deepEqual(dailyUptime(days), [
+    '2026-11-02: 99.65%',
+    '2026-11-01: 100%',
+    '2026-10-31: 0%',
+  ]);
+});
+
+test('dailyUptime keeps at most 30 days and handles none', () => {
+  const days = Array.from({ length: 35 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, up_pct: 100 }));
+  assert.equal(dailyUptime(days).length, 30);
+  assert.equal(dailyUptime(days)[0], '2026-10-35: 100%');
+  assert.deepEqual(dailyUptime([]), []);
 });
 
 test('isStale after 30 minutes without a check', () => {

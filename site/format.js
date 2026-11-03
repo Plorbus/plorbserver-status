@@ -23,24 +23,13 @@ export function formatPercent(value) {
   return value == null ? 'no data yet' : `${value}%`;
 }
 
-const DAY = 86_400_000;
-
-// One cell per UTC day, oldest first, ending today.
-//   █ every check up   ▄ some down   ▁ all down   ░ no checks
-export function historyBar(days, nowMs, count = 30) {
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  const cells = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const date = new Date(nowMs - i * DAY).toISOString().slice(0, 10);
-    const day = byDate.get(date);
-    if (!day) {
-      cells.push({ date, char: '░', label: `${date}: no data` });
-    } else {
-      const char = day.up_pct === 100 ? '█' : day.up_pct === 0 ? '▁' : '▄';
-      cells.push({ date, char, label: `${date}: ${day.up_pct}% up` });
-    }
-  }
-  return cells;
+// One line per UTC day that has checks, newest first: "2026-11-02: 99.65%".
+// Days with no checks are left out rather than listed as "no data".
+export function dailyUptime(days, count = 30) {
+  return [...days]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, count)
+    .map((day) => `${day.date}: ${formatPercent(day.up_pct)}`);
 }
 
 // Checks run every 5 minutes; half an hour of silence means the checker
