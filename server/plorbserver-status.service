@@ -13,14 +13,20 @@ Environment=PORT=8090
 Restart=on-failure
 RestartSec=5
 
-# Identity: a throwaway uid allocated at start, never root, no account to manage.
-DynamicUser=yes
+# Identity: a dedicated system user (adduser --system --group --no-create-home
+# plorbstatus). Not DynamicUser: on this box (systemd 259 + dbus-daemon) a
+# DynamicUser process can't talk to systemd over D-Bus, so `systemctl
+# is-active` fails with "Transport endpoint is not connected" (tested
+# 2026-11-03; a static user under the same sandbox works).
+User=plorbstatus
+Group=plorbstatus
 
 # Sandbox. Not MemoryDenyWriteExecute: V8 is a JIT and needs W+X memory.
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
+RemoveIPC=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

@@ -25,7 +25,7 @@ anything on my home network.
 1. **Status service** (`server/`). A small Node service on the server
    that answers `GET /` with coarse health JSON: up, boot time, uptime,
    whether two systemd services are active, load average, memory % and
-   disk %. It binds `127.0.0.1` only, runs as a throwaway non-root user
+   disk %. It binds `127.0.0.1` only, runs as its own non-root system user
    under a systemd sandbox, and caches its answer for 5 seconds so it can't
    be hammered. It has no npm dependencies.
 2. **Cloudflare Tunnel.** `cloudflared` on the server opens an *outbound*

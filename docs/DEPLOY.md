@@ -7,6 +7,7 @@ secret.
 ## 1. Status service (on the server)
 
 ```
+sudo adduser --system --group --no-create-home plorbstatus
 sudo git clone --single-branch --branch main https://github.com/Plorbus/plorbserver-status.git /opt/plorbserver-status
 sudo cp /opt/plorbserver-status/server/plorbserver-status.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -15,8 +16,10 @@ curl -s http://127.0.0.1:8090/        # JSON, with real "active" states
 systemd-analyze security plorbserver-status
 ```
 
-The code is owned by root and the service runs as a `DynamicUser`, so the
-running service cannot modify its own code. Update with
+The code is owned by root and the service runs as `plorbstatus`, so the
+running service cannot modify its own code. (Not `DynamicUser`: on this box a
+dynamic user couldn't reach systemd over D-Bus, so the service states read
+`unknown`. The unit file has the details.) Update with
 `sudo git -C /opt/plorbserver-status pull && sudo systemctl restart plorbserver-status`.
 
 ## 2. Cloudflare Tunnel

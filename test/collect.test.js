@@ -33,9 +33,11 @@ test('parseMemoryPercent uses MemAvailable, not MemFree', () => {
   assert.equal(parseMemoryPercent(PROC_MEMINFO), 39);
 });
 
-test('diskPercent matches df: used / (used + available to users)', () => {
-  // 1000 blocks, 600 free, 550 available to non-root: used 400 / (400 + 550)
-  assert.equal(diskPercent({ blocks: 1000, bfree: 600, bavail: 550 }), 42);
+test('diskPercent matches df: used / (used + available to users), rounded up', () => {
+  // 1000 blocks, 600 free, 550 available to non-root: used 400 / (400 + 550) = 42.1%
+  assert.equal(diskPercent({ blocks: 1000, bfree: 600, bavail: 550 }), 43);
+  // plorbserver on 2026-11-03: 29G of 2.7T. df says 2%, not 1%.
+  assert.equal(diskPercent({ blocks: 1000, bfree: 989, bavail: 989 }), 2);
 });
 
 test('unitState returns the state systemctl prints, even on non-zero exit', async () => {
@@ -88,7 +90,7 @@ test('snapshot has exactly the public fields, rounded', async () => {
     services: { 'email-pixel-tracker': 'active', nginx: 'active' },
     load: { '1m': 0.14, '5m': 0.08, '15m': 0.01, cpus: 16 },
     memory_used_percent: 39,
-    disk_used_percent: 42,
+    disk_used_percent: 43,
   });
   assert.deepEqual(Object.keys(s.services), [...UNITS]);
 });

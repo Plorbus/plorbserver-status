@@ -41,11 +41,11 @@ export function parseMemoryPercent(meminfo) {
   return Math.round(((total - kb('MemAvailable')) / total) * 100);
 }
 
-// Same formula as df's Use%: blocks reserved for root count as neither
-// used nor available.
+// Same as df's Use%: blocks reserved for root count as neither used nor
+// available, and the result rounds up, so the two always agree.
 export function diskPercent({ blocks, bfree, bavail }) {
   const used = blocks - bfree;
-  return Math.round((used / (used + bavail)) * 100);
+  return Math.ceil((used / (used + bavail)) * 100);
 }
 
 export function unitState(name, { timeoutMs = 2000, exec = execFile } = {}) {
