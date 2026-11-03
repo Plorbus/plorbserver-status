@@ -10,3 +10,6 @@ node_modules/
 .wrangler/
 .dev.vars
 *.log
+
+# Editor settings (JetBrains)
+.idea/
