@@ -1,0 +1,15 @@
+# /etc/cloudflared/config.yml on plorbserver (the real one has the tunnel UUID).
+# Rules are checked top to bottom; the first match wins.
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  # Read-only status JSON.
+  - hostname: api.plorbus.dev
+    service: http://127.0.0.1:8090
+  # Email tracker: only the pixel is public. /admin and /results stay off the tunnel.
+  - hostname: t.plorbus.dev
+    path: ^/pixel/
+    service: http://127.0.0.1:3000
+  # Everything else, including the bare domain and unknown paths.
+  - service: http_status:404

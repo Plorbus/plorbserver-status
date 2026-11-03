@@ -1,0 +1,51 @@
+# /etc/systemd/system/plorbserver-status.service
+# Read-only health JSON for https://api.plorbus.dev (via the Cloudflare Tunnel).
+[Unit]
+Description=plorbserver-status (read-only health JSON on 127.0.0.1:8090)
+Documentation=https://github.com/Plorbus/plorbserver-status
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /opt/plorbserver-status/server/status.js
+Environment=HOST=127.0.0.1
+Environment=PORT=8090
+Restart=on-failure
+RestartSec=5
+
+# Identity: a throwaway uid allocated at start, never root, no account to manage.
+DynamicUser=yes
+
+# Sandbox. Not MemoryDenyWriteExecute: V8 is a JIT and needs W+X memory.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_UNIX: systemctl talks to systemd over D-Bus. AF_NETLINK: Node/libuv.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+# It only ever talks to cloudflared on the same box.
+IPAddressDeny=any
+IPAddressAllow=localhost
+# The other tenants' files are none of its business.
+InaccessiblePaths=-/opt/minecraft -/opt/email-pixel-tracker -/var/lib/email-pixel-tracker -/etc/cloudflared -/var/lib/tailscale -/var/www
+
+[Install]
+WantedBy=multi-user.target
